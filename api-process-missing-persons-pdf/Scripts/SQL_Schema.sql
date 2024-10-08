@@ -33,6 +33,7 @@ ALTER TABLE MissingPersons
 ADD Latitude DECIMAL(9,6),
     Longitude DECIMAL(9,6);
 
+-- Add columns for DateFound and PdfName
 ALTER TABLE MissingPersons
 ADD DateFound DATE NULL,
     PdfName NVARCHAR(100) NULL
