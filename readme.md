@@ -3,7 +3,7 @@ This solution consists of 2 REST APIs a data ingestion REST API that is triggere
 
 ## Solution Architecture
 **Important Note** A Power Platform (low-code / Frontend) is not needed for this.  The solution is designed as a set of APIs so it can be consumed by any client i.e. React, Blazor, Streamlit, NextJS, you name it.   
-![Solution Architecture](./architecture/Solution-Architecture.jpg)
+![Solution Architecture](./architecture/Missing-Persons-GenAI-Architecture.jpg)
 
 # blob-trigger-mp-ingest
 This is an Azure Function (Blob Trigger) when executed it extracts the Missing Person Data from the PDF file and builds structured data from the PDF and it leverages GenAI for this.  Once the data has been successfully processed it will move the PDF into a Blob Container call **processed-mp-pdfs**.  If the parsing of the data fails it will move the file into a Blob Container called **failed-to-process-mp-pdfs**.  This Blob Trigger is a critical part of the solution as we need to get the **Missing Person** ingested into SQL so we can perform **Natural Language** Q&A using I **ChatProvider API**.
