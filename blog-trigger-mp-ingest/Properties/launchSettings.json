@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "blog_trigger_mp_ingest": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7169",
+      "launchBrowser": false
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureFunctionsJobHost__logging__logLevel__default": "Error",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "ApiDeploymentName": "<APiDeployment>",
+    "ApiEndpoint": "<ApiEndpoint>",
+    "ApiKey": "<ApiKey>",
+    "DatabaseConnection": "Server=tcp:<your_info>.database.windows.net,1433;Initial Catalog=<Your_Catalog>;Persist Security Info=False;User ID=<Your_UserId>;Password=<Your_Password>;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
+    "DatabaseDescription": "This DB contains tables with missing person related data",
+    "INBOUND_MP_PDF_CONTAINER": "inbound-mp-pdfs",
+    "PROCESSED_MP_PDF_CONTAINER": "processed-mp-pdfs",
+    "FAILED_TO_PROCESS_MP_PDF_CONTAINER": "failed-to-process-mp-pdfs",
+    "MpBlobConnectionString": "DefaultEndpointsProtocol=https;AccountName=<your account name>;AccountKey=<your account key>;EndpointSuffix=core.windows.net"
+
+  }
+}
