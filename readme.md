@@ -5,8 +5,13 @@ This solution consists of 2 REST APIs a data ingestion REST API that is triggere
 **Important Note** A Power Platform (low-code / Frontend) is not needed for this.  The solution is designed as a set of APIs so it can be consumed by any client i.e. React, Blazor, Streamlit, NextJS, you name it.   
 ![Solution Architecture](./architecture/Solution-Architecture.jpg)
 
-# api-process-missing-persons-pdf
-This is the Azure Function (Blob Trigger), which gets fired when a Missing Person PDF file is uploaded to an Azure Storage Account.  The function will extract data from the PDF and insert it into SQL.  This is the only purpose of this API.
+# blob-trigger-mp-ingest
+This is an Azure Function (Blob Trigger) when executed it extracts the Missing Person Data from the PDF file and builds structured data from the PDF and it leverages GenAI for this.  Once the data has been successfully processed it will move the PDF into a Blob Container call **processed-mp-pdfs**.  If the parsing of the data fails it will move the file into a Blob Container called **failed-to-process-mp-pdfs**.  This Blob Trigger is a critical part of the solution as we need to get the **Missing Person** ingested into SQL so we can perform **Natural Language** Q&A using I **ChatProvider API**.
+
+By moving the successfully processed files in a **processed-mp-pdfs** container and moving the PDFs that we failed to process into a **failed-to-process-mp-pdfs** container, you can not take action using tools like Logic Apps, or Power Automate when an event occurs in one of those folders.  For example, if you have a Power Automate Flow that monitors these containers it can send notifications to a Teams Channel when a failure occurs or a new Missing Person PDF has been processed.
+
+# api-process-missing-persons-files
+This 
 
 # api-missing-persons
 This is the GenAI Chat Service that allows any Client to interact with the data in a Chat style manner.  It leverages AI to interact with the data in Natural Language manner.  You are able to ask aggregate style questions about the data, examples below.
