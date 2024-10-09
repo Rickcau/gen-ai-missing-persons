@@ -21,17 +21,17 @@ namespace api_process_missing_persons_files.Helpers
 
         public AddressEnrichmentHelper(
             ILogger logger,
-            IHttpClientFactory httpClientFactory,
+            HttpClient httpclient,
             string connectionString,
             string mapsApiKey)
         {
             _logger = logger;
-            _httpClient = httpClientFactory.CreateClient();
+            _httpClient = httpclient;
             _connectionString = connectionString;
             _mapsApiKey = mapsApiKey;
         }
 
-        public async Task<HttpResponseData> HandleEnrichmentRequest(HttpRequestData req)
+        public async Task<HttpResponseData?> HandleEnrichmentRequest(HttpRequestData? req, string? requestBody)
         {
             _logger.LogInformation("Manual address enrichment function processed a request.");
 
@@ -40,8 +40,6 @@ namespace api_process_missing_persons_files.Helpers
                 await EnrichAddresses();
                 return null; // This is for the scheduled task which doesn't need a response
             }
-
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
 
             if (string.IsNullOrWhiteSpace(requestBody) || requestBody == "{}")
             {
@@ -87,7 +85,7 @@ namespace api_process_missing_persons_files.Helpers
             return response;
         }
 
-        private async Task EnrichAddresses()
+        public async Task EnrichAddresses()
         {
             _logger.LogInformation("Starting address enrichment process for all non-enriched addresses.");
 
@@ -132,21 +130,19 @@ namespace api_process_missing_persons_files.Helpers
             }
         }
 
+       
         private async Task EnrichSpecificAddress(int id)
         {
             _logger.LogInformation($"Starting address enrichment process for ID: {id}");
-
             try
             {
                 using (SqlConnection connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
-
                     string selectQuery = @"
                         SELECT MissingFrom 
                         FROM MissingPersons 
                         WHERE ID = @Id AND (IsEnriched = 0 OR IsEnriched IS NULL)";
-
                     using (SqlCommand command = new SqlCommand(selectQuery, connection))
                     {
                         command.Parameters.AddWithValue("@Id", id);
@@ -154,13 +150,22 @@ namespace api_process_missing_persons_files.Helpers
 
                         if (result != null && result != DBNull.Value)
                         {
-                            string address = result.ToString();
-                            await ProcessSingleAddress(connection, id, address);
-                            _logger.LogInformation($"Address enrichment completed for ID: {id}");
+                            // Use null-coalescing operator with empty string as default
+                            string address = result?.ToString() ?? string.Empty;
+
+                            if (!string.IsNullOrWhiteSpace(address))
+                            {
+                                await ProcessSingleAddress(connection, id, address);
+                                _logger.LogInformation($"Address enrichment completed for ID: {id}");
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Empty address found for ID {id}");
+                            }
                         }
                         else
                         {
-                            _logger.LogWarning($"No non-enriched address found for ID {id}");
+                            _logger.LogWarning($"Either a records ID {id} was not found or the IsEnriched = True for this record");
                         }
                     }
                 }
@@ -168,7 +173,7 @@ namespace api_process_missing_persons_files.Helpers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"An error occurred during the address enrichment process for ID: {id}");
-                throw;
+                throw; // Re-throw the exception if you want it to propagate up the call stack
             }
         }
 
@@ -176,7 +181,7 @@ namespace api_process_missing_persons_files.Helpers
         {
             try
             {
-                EnrichedAddress enrichedAddress = await EnrichAddressWithAzureMaps(address);
+                EnrichedAddress? enrichedAddress = await EnrichAddressWithAzureMaps(address);
                 if (enrichedAddress != null)
                 {
                     await UpdateAddressInDatabase(connection, id, enrichedAddress);
@@ -218,7 +223,48 @@ namespace api_process_missing_persons_files.Helpers
             }
         }
 
-        private async Task<EnrichedAddress> EnrichAddressWithAzureMaps(string address)
+        //private async Task<EnrichedAddress?> EnrichAddressWithAzureMaps(string address)
+        //{
+        //    string encodedAddress = Uri.EscapeDataString(address);
+        //    string url = $"https://atlas.microsoft.com/search/address/json?subscription-key={_mapsApiKey}&api-version=1.0&language=en-US&query={encodedAddress}, Detroit";
+
+        //    HttpResponseMessage response = await _httpClient.GetAsync(url);
+        //    if (!response.IsSuccessStatusCode)
+        //    {
+        //        _logger.LogError($"Azure Maps API request failed: {response.StatusCode}");
+        //        return null;
+        //    }
+
+        //    string responseBody = await response.Content.ReadAsStringAsync();
+        //    using (JsonDocument document = JsonDocument.Parse(responseBody))
+        //    {
+        //        JsonElement root = document.RootElement;
+        //        JsonElement results = root.GetProperty("results");
+
+        //        if (results.GetArrayLength() > 0)
+        //        {
+        //            JsonElement firstResult = results[0];
+        //            return new EnrichedAddress
+        //            {
+        //                MatchConfidence = firstResult.GetProperty("score").GetDouble(),
+        //                StreetNumber = GetJsonPropertyString(firstResult, "address", "streetNumber"),
+        //                StreetName = GetJsonPropertyString(firstResult, "address", "streetName"),
+        //                Municipality = GetJsonPropertyString(firstResult, "address", "municipality"),
+        //                Neighbourhood = GetJsonPropertyString(firstResult, "address", "neighbourhood"),
+        //                CountrySecondarySubdivision = GetJsonPropertyString(firstResult, "address", "countrySecondarySubdivision"),
+        //                CountrySubdivisionName = GetJsonPropertyString(firstResult, "address", "countrySubdivisionName"),
+        //                PostalCode = GetJsonPropertyString(firstResult, "address", "postalCode"),
+        //                ExtendedPostalCode = GetJsonPropertyString(firstResult, "address", "extendedPostalCode"),
+        //                Latitude = firstResult.GetProperty("position").GetProperty("lat").GetDouble(),
+        //                Longitude = firstResult.GetProperty("position").GetProperty("lon").GetDouble()
+        //            };
+        //        }
+        //    }
+
+        //    return null;
+        //}
+
+        private async Task<EnrichedAddress?> EnrichAddressWithAzureMaps(string address)
         {
             string encodedAddress = Uri.EscapeDataString(address);
             string url = $"https://atlas.microsoft.com/search/address/json?subscription-key={_mapsApiKey}&api-version=1.0&language=en-US&query={encodedAddress}, Detroit";
@@ -238,20 +284,32 @@ namespace api_process_missing_persons_files.Helpers
 
                 if (results.GetArrayLength() > 0)
                 {
-                    JsonElement firstResult = results[0];
+                    // Sort the results by score in descending order
+                    var sortedResults = results.EnumerateArray()
+                        .Select(result => new
+                        {
+                            Score = result.GetProperty("score").GetDouble(),
+                            Result = result
+                        })
+                        .OrderByDescending(item => item.Score)
+                        .ToList();
+
+                    // Get the result with the highest score
+                    var highestScoredResult = sortedResults.First().Result;
+
                     return new EnrichedAddress
                     {
-                        MatchConfidence = firstResult.GetProperty("score").GetDouble(),
-                        StreetNumber = GetJsonPropertyString(firstResult, "address", "streetNumber"),
-                        StreetName = GetJsonPropertyString(firstResult, "address", "streetName"),
-                        Municipality = GetJsonPropertyString(firstResult, "address", "municipality"),
-                        Neighbourhood = GetJsonPropertyString(firstResult, "address", "neighbourhood"),
-                        CountrySecondarySubdivision = GetJsonPropertyString(firstResult, "address", "countrySecondarySubdivision"),
-                        CountrySubdivisionName = GetJsonPropertyString(firstResult, "address", "countrySubdivisionName"),
-                        PostalCode = GetJsonPropertyString(firstResult, "address", "postalCode"),
-                        ExtendedPostalCode = GetJsonPropertyString(firstResult, "address", "extendedPostalCode"),
-                        Latitude = firstResult.GetProperty("position").GetProperty("lat").GetDouble(),
-                        Longitude = firstResult.GetProperty("position").GetProperty("lon").GetDouble()
+                        MatchConfidence = highestScoredResult.GetProperty("score").GetDouble(),
+                        StreetNumber = GetJsonPropertyString(highestScoredResult, "address", "streetNumber"),
+                        StreetName = GetJsonPropertyString(highestScoredResult, "address", "streetName"),
+                        Municipality = GetJsonPropertyString(highestScoredResult, "address", "municipality"),
+                        Neighbourhood = GetJsonPropertyString(highestScoredResult, "address", "neighbourhood"),
+                        CountrySecondarySubdivision = GetJsonPropertyString(highestScoredResult, "address", "countrySecondarySubdivision"),
+                        CountrySubdivisionName = GetJsonPropertyString(highestScoredResult, "address", "countrySubdivisionName"),
+                        PostalCode = GetJsonPropertyString(highestScoredResult, "address", "postalCode"),
+                        ExtendedPostalCode = GetJsonPropertyString(highestScoredResult, "address", "extendedPostalCode")?.Split(',').FirstOrDefault()?.Trim(),
+                        Latitude = highestScoredResult.GetProperty("position").GetProperty("lat").GetDouble(),
+                        Longitude = highestScoredResult.GetProperty("position").GetProperty("lon").GetDouble()
                     };
                 }
             }
@@ -259,14 +317,15 @@ namespace api_process_missing_persons_files.Helpers
             return null;
         }
 
-        private string GetJsonPropertyString(JsonElement element, params string[] propertyNames)
+        private string? GetJsonPropertyString(JsonElement element, params string[] propertyNames)
         {
             foreach (var prop in propertyNames)
             {
-                if (!element.TryGetProperty(prop, out element))
+                if (!element.TryGetProperty(prop, out var childElement))
                     return null;
+                element = childElement;
             }
-            return element.GetString();
+            return element.ValueKind == JsonValueKind.String ? element.GetString() : null;
         }
 
         private async Task UpdateAddressInDatabase(SqlConnection connection, int id, EnrichedAddress enrichedAddress)

@@ -173,28 +173,34 @@ namespace api_process_mp_pdfs.Function
         private async Task EnrichSpecificAddress(int id)
         {
             _logger.LogInformation($"Starting address enrichment process for ID: {id}");
-
             try
             {
                 using (SqlConnection connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
-
                     string selectQuery = @"
                         SELECT MissingFrom 
                         FROM MissingPersons 
                         WHERE ID = @Id AND (IsEnriched = 0 OR IsEnriched IS NULL)";
-
                     using (SqlCommand command = new SqlCommand(selectQuery, connection))
                     {
                         command.Parameters.AddWithValue("@Id", id);
                         var result = await command.ExecuteScalarAsync();
-                        
+
                         if (result != null && result != DBNull.Value)
                         {
-                            string address = result.ToString();
-                            await ProcessSingleAddress(connection, id, address);
-                            _logger.LogInformation($"Address enrichment completed for ID: {id}");
+                            // Use null-coalescing operator with empty string as default
+                            string address = result?.ToString() ?? string.Empty;
+
+                            if (!string.IsNullOrWhiteSpace(address))
+                            {
+                                await ProcessSingleAddress(connection, id, address);
+                                _logger.LogInformation($"Address enrichment completed for ID: {id}");
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Empty address found for ID {id}");
+                            }
                         }
                         else
                         {
@@ -214,7 +220,7 @@ namespace api_process_mp_pdfs.Function
         {
             try
             {
-                EnrichedAddress enrichedAddress = await EnrichAddressWithAzureMaps(address);
+                EnrichedAddress? enrichedAddress = await EnrichAddressWithAzureMaps(address);
                 if (enrichedAddress != null)
                 {
                     await UpdateAddressInDatabase(connection, id, enrichedAddress);
@@ -258,7 +264,7 @@ namespace api_process_mp_pdfs.Function
             }
         }
 
-        private async Task<EnrichedAddress> EnrichAddressWithAzureMaps(string address)
+        private async Task<EnrichedAddress?> EnrichAddressWithAzureMaps(string address)
         {
             string encodedAddress = Uri.EscapeDataString(address);
             // URL could be read from a configuration file or environment variable
@@ -300,50 +306,51 @@ namespace api_process_mp_pdfs.Function
             return null;
         }
 
-    private string GetJsonPropertyString(JsonElement element, params string[] propertyNames)
-    {
-        foreach (var prop in propertyNames)
+        private string? GetJsonPropertyString(JsonElement element, params string[] propertyNames)
         {
-            if (!element.TryGetProperty(prop, out element))
-                return null;
+            foreach (var prop in propertyNames)
+            {
+                if (!element.TryGetProperty(prop, out var childElement))
+                    return null;
+                element = childElement;
+            }
+            return element.ValueKind == JsonValueKind.String ? element.GetString() : null;
         }
-        return element.GetString();
-    }
-    private async Task UpdateAddressInDatabase(SqlConnection connection, int id, EnrichedAddress enrichedAddress)
-    {
-        string updateQuery = @"
-            UPDATE MissingPersons 
-            SET StreetNumber = @StreetNumber, 
-                StreetName = @StreetName, 
-                Municipality = @Municipality, 
-                Neighbourhood = @Neighbourhood, 
-                CountrySecondarySubdivision = @CountrySecondarySubdivision, 
-                CountrySubdivisionName = @CountrySubdivisionName, 
-                PostalCode = @PostalCode, 
-                ExtendedPostalCode = @ExtendedPostalCode, 
-                Latitude = @Latitude, 
-                Longitude = @Longitude, 
-                MatchConfidence = @MatchConfidence, 
-                IsEnriched = 1
-            WHERE ID = @Id";
-
-        using (SqlCommand command = new SqlCommand(updateQuery, connection))
+        private async Task UpdateAddressInDatabase(SqlConnection connection, int id, EnrichedAddress enrichedAddress)
         {
-            command.Parameters.AddWithValue("@StreetNumber", enrichedAddress.StreetNumber ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@StreetName", enrichedAddress.StreetName ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Municipality", enrichedAddress.Municipality ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Neighbourhood", enrichedAddress.Neighbourhood ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@CountrySecondarySubdivision", enrichedAddress.CountrySecondarySubdivision ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@CountrySubdivisionName", enrichedAddress.CountrySubdivisionName ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@PostalCode", enrichedAddress.PostalCode ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@ExtendedPostalCode", enrichedAddress.ExtendedPostalCode ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@Latitude", enrichedAddress.Latitude);
-            command.Parameters.AddWithValue("@Longitude", enrichedAddress.Longitude);
-            command.Parameters.AddWithValue("@MatchConfidence", enrichedAddress.MatchConfidence);
-            command.Parameters.AddWithValue("@Id", id);
+            string updateQuery = @"
+                UPDATE MissingPersons 
+                SET StreetNumber = @StreetNumber, 
+                    StreetName = @StreetName, 
+                    Municipality = @Municipality, 
+                    Neighbourhood = @Neighbourhood, 
+                    CountrySecondarySubdivision = @CountrySecondarySubdivision, 
+                    CountrySubdivisionName = @CountrySubdivisionName, 
+                    PostalCode = @PostalCode, 
+                    ExtendedPostalCode = @ExtendedPostalCode, 
+                    Latitude = @Latitude, 
+                    Longitude = @Longitude, 
+                    MatchConfidence = @MatchConfidence, 
+                    IsEnriched = 1
+                WHERE ID = @Id";
 
-            await command.ExecuteNonQueryAsync();
+            using (SqlCommand command = new SqlCommand(updateQuery, connection))
+            {
+                command.Parameters.AddWithValue("@StreetNumber", enrichedAddress.StreetNumber ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@StreetName", enrichedAddress.StreetName ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@Municipality", enrichedAddress.Municipality ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@Neighbourhood", enrichedAddress.Neighbourhood ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@CountrySecondarySubdivision", enrichedAddress.CountrySecondarySubdivision ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@CountrySubdivisionName", enrichedAddress.CountrySubdivisionName ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@PostalCode", enrichedAddress.PostalCode ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@ExtendedPostalCode", enrichedAddress.ExtendedPostalCode ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@Latitude", enrichedAddress.Latitude);
+                command.Parameters.AddWithValue("@Longitude", enrichedAddress.Longitude);
+                command.Parameters.AddWithValue("@MatchConfidence", enrichedAddress.MatchConfidence);
+                command.Parameters.AddWithValue("@Id", id);
+
+                await command.ExecuteNonQueryAsync();
+            }
         }
-    }
     }
 }
