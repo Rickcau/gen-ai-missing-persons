@@ -11,7 +11,7 @@ This is an Azure Function (Blob Trigger) when executed it extracts the Missing P
 By moving the successfully processed files in a **processed-mp-pdfs** container and moving the PDFs that we failed to process into a **failed-to-process-mp-pdfs** container, you can not take action using tools like Logic Apps, or Power Automate when an event occurs in one of those folders.  For example, if you have a Power Automate Flow that monitors these containers it can send notifications to a Teams Channel when a failure occurs or a new Missing Person PDF has been processed.
 
 # api-process-missing-persons-files
-This 
+This is the Enrichment API, which has a scheduled Azure Function that runs every 48hrs to enrich the Address Data using Azure Maps API.  This allows us to add things like latitude and longitude, neighbourhood etc.  
 
 # api-missing-persons
 This is the GenAI Chat Service that allows any Client to interact with the data in a Chat style manner.  It leverages AI to interact with the data in Natural Language manner.  You are able to ask aggregate style questions about the data, examples below.
@@ -23,8 +23,8 @@ This is the GenAI Chat Service that allows any Client to interact with the data 
 
 We also have a custom DBQueryPlugin which is used to interact with the DB to collect the data needed to answer the user's question.
 
-## Ideas to consider
-The **Missing From** section has the last known location reported missing from.  It does not include a complete address, but this information can be used to get a latitude and longitude using a service like Azure Maps.
+## Ideas to Consider
+Ideally, you would expose a REST API that exposes CRUD operations for data that is stored in SQL.  This would allow the data to be maintained via the API and could be leveraged from a frontend or any tool that can make REST API requests.
 
 ## Azure Maps for GeoCoding
 
