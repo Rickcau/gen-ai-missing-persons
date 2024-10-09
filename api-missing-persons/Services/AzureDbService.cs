@@ -19,7 +19,7 @@
             return jsonString;
         }
 
-        public async Task<PersonDetail> GetMissingPerson(string name, int age, DateTime dateReported)
+        public async Task<PersonDetail?> GetMissingPerson(string name, int age, DateTime dateReported)
         {
             using IDbConnection connection = new SqlConnection(connectionString);
 

@@ -1,63 +1,45 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
 using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Text.Json;
+using System.IO;
 using System.Data.SqlClient;
 using System.Net.Http;
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-using System.IO;
-using System.Net;
-using api_process_mp_pdfs.Models;
+using api_process_missing_persons_files.Models;
 
-namespace api_process_mp_pdfs.Function
+namespace api_process_missing_persons_files.Helpers
 {
-    public class EnrichAddressesScheduled
+    public class AddressEnrichmentHelper
     {
         private readonly ILogger _logger;
         private readonly HttpClient _httpClient;
-        private readonly string? _connectionString;
-        private readonly string? _mapsApiKey;
+        private readonly string _connectionString;
+        private readonly string _mapsApiKey;
 
-        public EnrichAddressesScheduled(ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
+        public AddressEnrichmentHelper(
+            ILogger logger,
+            HttpClient httpclient,
+            string connectionString,
+            string mapsApiKey)
         {
-            _logger = loggerFactory.CreateLogger<EnrichAddressesScheduled>();
-            _httpClient = httpClientFactory.CreateClient();
-            _connectionString = Environment.GetEnvironmentVariable("DatabaseConnection");
-            _mapsApiKey = Environment.GetEnvironmentVariable("AzureMapsApiKey");
+            _logger = logger;
+            _httpClient = httpclient;
+            _connectionString = connectionString;
+            _mapsApiKey = mapsApiKey;
         }
 
-        [Function("EnrichAddressesScheduled")]
-        public async Task RunScheduled([TimerTrigger("0 0 */48 * * *")] TimerInfo myTimer)
+        public async Task<HttpResponseData?> HandleEnrichmentRequest(HttpRequestData? req, string? requestBody)
         {
-            _logger.LogInformation($"Scheduled address enrichment function executed at: {DateTime.Now}");
-            await EnrichAddresses();
-        }
-
-
-        [Function("EnrichAddressesManual")]
-        [OpenApiOperation(operationId: "EnrichAddresses", tags: new[] { "Address Enrichment" },
-            Summary = "Enrich addresses manually",
-            Description = "This function allows you to enrich either a specific address by providing an ID, or all non-enriched addresses if no ID is provided.")]
-        [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(EnrichmentRequest), Required = true, Description = "The request body can either contain an 'id' for a specific address or be empty to process all addresses.")]
-        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "text/plain", bodyType: typeof(string), Description = "The OK response with a description of the enrichment process result.")]
-        [OpenApiResponseWithBody(statusCode: HttpStatusCode.BadRequest, contentType: "text/plain", bodyType: typeof(string), Description = "Bad request if the input is invalid.")]
-        public async Task<HttpResponseData> RunManual([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
-        {
-            // If you want to enrich a specific address instead of all addresses, you can pass the address in the request body. For example:
-            // send the following JSON in the request body to enrich a specific address:
-            // {
-            // "id": 123
-            // }
-            // If you want the enrich all records in the database, send an empty request body.
-            // {}
-
             _logger.LogInformation("Manual address enrichment function processed a request.");
 
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            if (req == null)
+            {
+                await EnrichAddresses();
+                return null; // This is for the scheduled task which doesn't need a response
+            }
 
             if (string.IsNullOrWhiteSpace(requestBody) || requestBody == "{}")
             {
@@ -70,8 +52,7 @@ namespace api_process_mp_pdfs.Function
                 JsonElement root = doc.RootElement;
                 if (root.TryGetProperty("id", out JsonElement idElement) && idElement.ValueKind == JsonValueKind.Number)
                 {
-                    // Pass the entire requestBody to ProcessSpecificAddress
-                    return await ProcessSpecificAddress(req, requestBody);
+                    return await ProcessSpecificAddress(req, idElement.GetInt32());
                 }
                 else
                 {
@@ -81,12 +62,10 @@ namespace api_process_mp_pdfs.Function
             catch (JsonException ex)
             {
                 _logger.LogError($"Invalid JSON in request body: {ex.Message}");
-                HttpResponseData response = req.CreateResponse(System.Net.HttpStatusCode.BadRequest);
+                HttpResponseData response = req.CreateResponse(HttpStatusCode.BadRequest);
                 await response.WriteStringAsync("Invalid JSON in request body");
                 return response;
             }
-            
-
         }
 
         private async Task<HttpResponseData> ProcessAllAddresses(HttpRequestData req)
@@ -98,34 +77,15 @@ namespace api_process_mp_pdfs.Function
             return response;
         }
 
-         private async Task<HttpResponseData> ProcessSpecificAddress(HttpRequestData req, string requestBody)
+        private async Task<HttpResponseData> ProcessSpecificAddress(HttpRequestData req, int id)
         {
-            try
-            {
-                var data = JsonSerializer.Deserialize<JsonElement>(requestBody);
-                if (data.TryGetProperty("id", out JsonElement idElement) && idElement.TryGetInt32(out int id))
-                {
-                    await EnrichSpecificAddress(id);
-                    var response = req.CreateResponse(HttpStatusCode.OK);
-                    await response.WriteStringAsync($"Address enrichment process completed for ID: {id}");
-                    return response;
-                }
-                else
-                {
-                    var response = req.CreateResponse(HttpStatusCode.BadRequest);
-                    await response.WriteStringAsync("Invalid request body. Please provide a valid 'id'.");
-                    return response;
-                }
-            }
-            catch (JsonException)
-            {
-                var response = req.CreateResponse(HttpStatusCode.BadRequest);
-                await response.WriteStringAsync("Invalid JSON in request body.");
-                return response;
-            }
+            await EnrichSpecificAddress(id);
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            await response.WriteStringAsync($"Address enrichment process completed for ID: {id}");
+            return response;
         }
 
-        private async Task EnrichAddresses()
+        public async Task EnrichAddresses()
         {
             _logger.LogInformation("Starting address enrichment process for all non-enriched addresses.");
 
@@ -166,10 +126,11 @@ namespace api_process_mp_pdfs.Function
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred during the address enrichment process.");
-                throw; // Re-throw the exception if you want it to propagate up the call stack
+                throw;
             }
         }
 
+       
         private async Task EnrichSpecificAddress(int id)
         {
             _logger.LogInformation($"Starting address enrichment process for ID: {id}");
@@ -204,7 +165,7 @@ namespace api_process_mp_pdfs.Function
                         }
                         else
                         {
-                            _logger.LogWarning($"No non-enriched address found for ID {id}");
+                            _logger.LogWarning($"Either a records ID {id} was not found or the IsEnriched = True for this record");
                         }
                     }
                 }
@@ -258,16 +219,54 @@ namespace api_process_mp_pdfs.Function
                 catch (Exception ex)
                 {
                     _logger.LogError($"Error marking address enrichment as failed in database for ID {id}: {ex.Message}");
-                    // Depending on your error handling strategy, you might want to re-throw the exception here
-                    // throw;
                 }
             }
         }
 
+        //private async Task<EnrichedAddress?> EnrichAddressWithAzureMaps(string address)
+        //{
+        //    string encodedAddress = Uri.EscapeDataString(address);
+        //    string url = $"https://atlas.microsoft.com/search/address/json?subscription-key={_mapsApiKey}&api-version=1.0&language=en-US&query={encodedAddress}, Detroit";
+
+        //    HttpResponseMessage response = await _httpClient.GetAsync(url);
+        //    if (!response.IsSuccessStatusCode)
+        //    {
+        //        _logger.LogError($"Azure Maps API request failed: {response.StatusCode}");
+        //        return null;
+        //    }
+
+        //    string responseBody = await response.Content.ReadAsStringAsync();
+        //    using (JsonDocument document = JsonDocument.Parse(responseBody))
+        //    {
+        //        JsonElement root = document.RootElement;
+        //        JsonElement results = root.GetProperty("results");
+
+        //        if (results.GetArrayLength() > 0)
+        //        {
+        //            JsonElement firstResult = results[0];
+        //            return new EnrichedAddress
+        //            {
+        //                MatchConfidence = firstResult.GetProperty("score").GetDouble(),
+        //                StreetNumber = GetJsonPropertyString(firstResult, "address", "streetNumber"),
+        //                StreetName = GetJsonPropertyString(firstResult, "address", "streetName"),
+        //                Municipality = GetJsonPropertyString(firstResult, "address", "municipality"),
+        //                Neighbourhood = GetJsonPropertyString(firstResult, "address", "neighbourhood"),
+        //                CountrySecondarySubdivision = GetJsonPropertyString(firstResult, "address", "countrySecondarySubdivision"),
+        //                CountrySubdivisionName = GetJsonPropertyString(firstResult, "address", "countrySubdivisionName"),
+        //                PostalCode = GetJsonPropertyString(firstResult, "address", "postalCode"),
+        //                ExtendedPostalCode = GetJsonPropertyString(firstResult, "address", "extendedPostalCode"),
+        //                Latitude = firstResult.GetProperty("position").GetProperty("lat").GetDouble(),
+        //                Longitude = firstResult.GetProperty("position").GetProperty("lon").GetDouble()
+        //            };
+        //        }
+        //    }
+
+        //    return null;
+        //}
+
         private async Task<EnrichedAddress?> EnrichAddressWithAzureMaps(string address)
         {
             string encodedAddress = Uri.EscapeDataString(address);
-            // URL could be read from a configuration file or environment variable
             string url = $"https://atlas.microsoft.com/search/address/json?subscription-key={_mapsApiKey}&api-version=1.0&language=en-US&query={encodedAddress}, Detroit";
 
             HttpResponseMessage response = await _httpClient.GetAsync(url);
@@ -282,23 +281,35 @@ namespace api_process_mp_pdfs.Function
             {
                 JsonElement root = document.RootElement;
                 JsonElement results = root.GetProperty("results");
-                
+
                 if (results.GetArrayLength() > 0)
                 {
-                    JsonElement firstResult = results[0];
+                    // Sort the results by score in descending order
+                    var sortedResults = results.EnumerateArray()
+                        .Select(result => new
+                        {
+                            Score = result.GetProperty("score").GetDouble(),
+                            Result = result
+                        })
+                        .OrderByDescending(item => item.Score)
+                        .ToList();
+
+                    // Get the result with the highest score
+                    var highestScoredResult = sortedResults.First().Result;
+
                     return new EnrichedAddress
                     {
-                        MatchConfidence = firstResult.GetProperty("score").GetDouble(),
-                        StreetNumber = GetJsonPropertyString(firstResult, "address", "streetNumber"),
-                        StreetName = GetJsonPropertyString(firstResult, "address", "streetName"),
-                        Municipality = GetJsonPropertyString(firstResult, "address", "municipality"),
-                        Neighbourhood = GetJsonPropertyString(firstResult, "address", "neighbourhood"),
-                        CountrySecondarySubdivision = GetJsonPropertyString(firstResult, "address", "countrySecondarySubdivision"),
-                        CountrySubdivisionName = GetJsonPropertyString(firstResult, "address", "countrySubdivisionName"),
-                        PostalCode = GetJsonPropertyString(firstResult, "address", "postalCode"),
-                        ExtendedPostalCode = GetJsonPropertyString(firstResult, "address", "extendedPostalCode"),
-                        Latitude = firstResult.GetProperty("position").GetProperty("lat").GetDouble(),
-                        Longitude = firstResult.GetProperty("position").GetProperty("lon").GetDouble()
+                        MatchConfidence = highestScoredResult.GetProperty("score").GetDouble(),
+                        StreetNumber = GetJsonPropertyString(highestScoredResult, "address", "streetNumber"),
+                        StreetName = GetJsonPropertyString(highestScoredResult, "address", "streetName"),
+                        Municipality = GetJsonPropertyString(highestScoredResult, "address", "municipality"),
+                        Neighbourhood = GetJsonPropertyString(highestScoredResult, "address", "neighbourhood"),
+                        CountrySecondarySubdivision = GetJsonPropertyString(highestScoredResult, "address", "countrySecondarySubdivision"),
+                        CountrySubdivisionName = GetJsonPropertyString(highestScoredResult, "address", "countrySubdivisionName"),
+                        PostalCode = GetJsonPropertyString(highestScoredResult, "address", "postalCode"),
+                        ExtendedPostalCode = GetJsonPropertyString(highestScoredResult, "address", "extendedPostalCode")?.Split(',').FirstOrDefault()?.Trim(),
+                        Latitude = highestScoredResult.GetProperty("position").GetProperty("lat").GetDouble(),
+                        Longitude = highestScoredResult.GetProperty("position").GetProperty("lon").GetDouble()
                     };
                 }
             }
@@ -316,6 +327,7 @@ namespace api_process_mp_pdfs.Function
             }
             return element.ValueKind == JsonValueKind.String ? element.GetString() : null;
         }
+
         private async Task UpdateAddressInDatabase(SqlConnection connection, int id, EnrichedAddress enrichedAddress)
         {
             string updateQuery = @"

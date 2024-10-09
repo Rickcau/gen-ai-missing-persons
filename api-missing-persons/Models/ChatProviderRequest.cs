@@ -8,6 +8,6 @@ namespace api_missing_persons.Models
 
         public string? UserId { get; set; }
         [Required]
-        public string Prompt { get; set; }
+        public required string Prompt { get; set; }
     }
 }
