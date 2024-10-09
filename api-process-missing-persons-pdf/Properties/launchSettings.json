@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "api_process_missing_persons_pdf": {
-      "commandName": "Project",
-      "commandLineArgs": "--port 7027",
-      "launchBrowser": false
-    }
-  }
-}
