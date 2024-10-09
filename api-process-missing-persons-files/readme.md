@@ -13,7 +13,7 @@ This endpoint allows you to pass either an empty JSON payload in the request bod
    ~~~
 
 ### Example of Azure Maps API Response
-![example response](./images/azure-maps.jpg)
+![example response](../images/azure-maps.jpg)
 
 ## GET /api/HealthCheck
 This endpoint is designed to allow the client of the endpoint check the **Health** of the API.  Currently it is stubbed out, but you would simply add logic that would check that the various dependant services are up and available i.e. SQL, Storage Acount etc.
