@@ -49,7 +49,10 @@ namespace blog_trigger_mp_ingest.Helpers
 
             // Step 2: Analyze the extracted text using Azure OpenAI
             var missingPersonData = await AnalyzePdfText(extractedText);
-
+            if (missingPersonData != null)
+            {
+                missingPersonData.PdfName = name;  // add the name of the Missing Person PDF to the POCO Class.
+            }
             // Check if missingPersonData is null
             if (missingPersonData == null)
             {
@@ -142,6 +145,7 @@ namespace blog_trigger_mp_ingest.Helpers
                 {
                     missingPersonData.Latitude = location?.Latitude;
                     missingPersonData.Longitude = location?.Longitude;
+           
                 }
 
                 return missingPersonData;

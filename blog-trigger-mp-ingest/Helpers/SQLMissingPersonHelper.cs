@@ -28,11 +28,11 @@ namespace blog_trigger_mp_ingest.Helpers
                 INSERT INTO MissingPersons (
                     Name, Race, Age, Sex, Height, Weight, EyeColor, Hair, Alias, Tattoos,
                     LastSeen, DateReported, MissingFrom, ConditionsOfDisappearance, OfficerInfo,
-                    PhoneNumber1, PhoneNumber2, CurrentStatus, Latitude, Longitude
+                    PhoneNumber1, PhoneNumber2, CurrentStatus, Latitude, Longitude, PdfName
                 ) VALUES (
                     @Name, @Race, @Age, @Sex, @Height, @Weight, @EyeColor, @Hair, @Alias, @Tattoos,
                     @LastSeen, @DateReported, @MissingFrom, @ConditionsOfDisappearance, @OfficerInfo,
-                    @PhoneNumber1, @PhoneNumber2, @CurrentStatus, @Latitude, @Longitude
+                    @PhoneNumber1, @PhoneNumber2, @CurrentStatus, @Latitude, @Longitude, @PdfName
                 )";
 
             using var command = new SqlCommand(sql, connection);
@@ -57,6 +57,7 @@ namespace blog_trigger_mp_ingest.Helpers
             command.Parameters.Add("@CurrentStatus", SqlDbType.NVarChar, 7).Value = "Missing" ?? (object)DBNull.Value;
             command.Parameters.Add("@Latitude", SqlDbType.Float).Value = person.Latitude ?? (object)DBNull.Value;
             command.Parameters.Add("@Longitude", SqlDbType.Float).Value = person.Longitude ?? (object)DBNull.Value;
+            command.Parameters.Add("@PdfName", SqlDbType.NVarChar, 100).Value = person.PdfName ?? (object)DBNull.Value;
 
             await command.ExecuteNonQueryAsync();
         }

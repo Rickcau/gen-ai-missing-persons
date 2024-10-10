@@ -59,6 +59,9 @@ public class MissingPerson
 
     [JsonPropertyName("longitude")]
     public double? Longitude { get; set; }
+
+    [JsonPropertyName("pdfname")]
+    public string? PdfName { get; set; }
 }
 
 
