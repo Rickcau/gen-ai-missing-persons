@@ -7,6 +7,7 @@ public interface IChatHistoryManager
 {
     ChatHistory GetOrCreateChatHistory(string sessionId);
     void CleanupOldHistories();
+    bool ClearChatHistory(string sessionId);
 }
 
 public class ChatHistoryManager : IChatHistoryManager
