@@ -99,6 +99,47 @@ namespace api_missing_persons.Controllers
             return new OkObjectResult(response);
         }
 
+        [HttpPost("clear-history")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public IActionResult ClearChatHistory([FromBody] ClearChatHistoryRequest request)
+        {
+            // Here is an example of what needs to be passed in the request body.
+                //{
+                //    "sessionId": "your-session-id-here"
+                //}
+            try
+            {
+                if (string.IsNullOrEmpty(request.SessionId))
+                {
+                    _logger.LogWarning("Clear chat history request is missing SessionId.");
+                    return BadRequest("SessionId is required.");
+                }
+
+                bool isCleared = _chatHistoryManager.ClearChatHistory(request.SessionId);
+
+                if (isCleared)
+                {
+                    _logger.LogInformation($"Chat history cleared for SessionId: {request.SessionId}");
+                    return Ok($"Chat history cleared for SessionId: {request.SessionId}");
+                }
+                else
+                {
+                    _logger.LogWarning($"No chat history found for SessionId: {request.SessionId}");
+                    return NotFound($"No chat history found for SessionId: {request.SessionId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing chat history.");
+                return StatusCode(500, "Internal server error.");
+            }
+        }
+
+
         [HttpPatch("patch-missing-person")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
