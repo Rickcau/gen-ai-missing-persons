@@ -49,4 +49,11 @@ public class ChatHistoryManager : IChatHistoryManager
             }
         }
     }
+
+    // added method to allow the removal of a ChatHistory for a given session,
+    // can can be helpful when testing how the chathistory is impacting the responses
+    public bool ClearChatHistory(string sessionId)
+    {
+        return _chatHistories.TryRemove(sessionId, out _);
+    }
 }
