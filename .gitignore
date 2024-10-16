@@ -265,3 +265,4 @@ paket-files/
 __pycache__/
 *.pyc
 /api-missing-persons/appsettings.Local.json
+/api-process-missing-persons-pdf/SampleData/SampleData.xlsx
