@@ -30,6 +30,7 @@ builder.Services.AddHttpClient("ChatAPI", client =>
     // for local API http://localhost:7049/Chat/
     // for azure deployment https://someapi.azurewebsites.net/api/travel-data
     client.BaseAddress = new Uri("https://localhost:7049/");
+    client.DefaultRequestHeaders.Add("api-key", "1234");
 });
 
 builder.Services.AddScoped<ChatService>();
