@@ -1,6 +1,9 @@
 # gen-ai-missing-persons
 This solution consists of 2 REST APIs a data ingestion REST API that is triggered when  Missing Person PDF files are uploaded to an Azure Blob Container.  When a PDF is uploaded, the Blob Trigger will parse the contains of the PDF file extracting the Text then it will insert that data into SQL.  The 2nd API is the AI Chat REST service, it allows clients to chat with the data. 
 
+## LICENSE
+The [MIT License](./LICENSE) applies to all the solutions / projects / examples included in this repository.  
+
 ## Solution Architecture
 **Important Note** A Power Platform (low-code / Frontend) is not needed for this.  The solution is designed as a set of APIs so it can be consumed by any client i.e. React, Blazor, Streamlit, NextJS, you name it.   
 ![Solution Architecture](./architecture/Missing-Persons-GenAI-Architecture.jpg)
